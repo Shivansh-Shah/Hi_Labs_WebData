@@ -1,0 +1,51 @@
+# ═══════════════════════════════════════════════════
+# GTM Intelligence Platform — requirements.txt
+# ═══════════════════════════════════════════════════
+
+# ── Core async HTTP (all collectors use this) ──────
+httpx[http2]==0.27.0
+anyio==4.4.0
+
+# ── Certificate Transparency (free WebSocket stream) ─
+certstream==1.11
+
+# ── Google Gemini (FREE AI layer — replaces Anthropic) ─
+google-generativeai==0.8.3
+
+# ── Async workers ──────────────────────────────────
+celery==5.4.0
+redis==5.0.7
+
+# ── Config / env ───────────────────────────────────
+python-dotenv==1.0.1
+
+# ── Browser automation (Scraping Browser fallback) ─
+# Only needed if using ScrapingBrowserClient
+# pip install playwright && playwright install chromium
+playwright==1.44.0
+
+# ── Data processing (Stage 3+) ─────────────────────
+pandas==2.2.2
+spacy==3.7.5
+
+# ── Graph clustering (Stage 4) ─────────────────────
+networkx==3.3
+
+# ── WHOIS (Module 2 — product launch sniper) ───────
+python-whois==0.9.4
+
+# ── Web framework (Stage 6) ────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+
+# ── Database (Stage 6) ─────────────────────────────
+asyncpg==0.29.0
+sqlalchemy[asyncio]==2.0.31
+
+# ── Utils ──────────────────────────────────────────
+cryptography==42.0.8
+typing-extensions==4.12.2
+
+# ── Dev / testing ──────────────────────────────────
+pytest==8.2.2
+pytest-asyncio==0.23.7

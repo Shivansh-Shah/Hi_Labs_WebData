@@ -1,0 +1,52 @@
+{
+  "_comment": "Vendor fingerprint lookup table. Maps subdomain prefix patterns to likely vendors.",
+  "_schema": "{ pattern: string, vendor: string, category: string, confidence: float }",
+
+  "subdomain_patterns": [
+    { "pattern": "analytics",       "vendor": "Amplitude / Mixpanel",  "category": "analytics",     "confidence": 0.65 },
+    { "pattern": "crm",             "vendor": "Salesforce / HubSpot",  "category": "crm",           "confidence": 0.70 },
+    { "pattern": "salesforce",      "vendor": "Salesforce",            "category": "crm",           "confidence": 0.95 },
+    { "pattern": "hubspot",         "vendor": "HubSpot",               "category": "crm",           "confidence": 0.95 },
+    { "pattern": "marketo",         "vendor": "Marketo",               "category": "marketing",     "confidence": 0.95 },
+    { "pattern": "pardot",          "vendor": "Salesforce Pardot",     "category": "marketing",     "confidence": 0.95 },
+    { "pattern": "stripe",          "vendor": "Stripe",                "category": "payments",      "confidence": 0.90 },
+    { "pattern": "payments",        "vendor": "Stripe / Braintree",    "category": "payments",      "confidence": 0.60 },
+    { "pattern": "workday",         "vendor": "Workday",               "category": "hris",          "confidence": 0.92 },
+    { "pattern": "bamboo",          "vendor": "BambooHR",              "category": "hris",          "confidence": 0.90 },
+    { "pattern": "okta",            "vendor": "Okta",                  "category": "identity",      "confidence": 0.95 },
+    { "pattern": "auth",            "vendor": "Okta / Auth0",          "category": "identity",      "confidence": 0.55 },
+    { "pattern": "sso",             "vendor": "Okta / OneLogin",       "category": "identity",      "confidence": 0.65 },
+    { "pattern": "zendesk",         "vendor": "Zendesk",               "category": "support",       "confidence": 0.95 },
+    { "pattern": "support",         "vendor": "Zendesk / Intercom",    "category": "support",       "confidence": 0.55 },
+    { "pattern": "intercom",        "vendor": "Intercom",              "category": "support",       "confidence": 0.95 },
+    { "pattern": "datadog",         "vendor": "Datadog",               "category": "observability", "confidence": 0.95 },
+    { "pattern": "newrelic",        "vendor": "New Relic",             "category": "observability", "confidence": 0.95 },
+    { "pattern": "segment",         "vendor": "Segment",               "category": "cdp",           "confidence": 0.90 },
+    { "pattern": "snowflake",       "vendor": "Snowflake",             "category": "data_warehouse","confidence": 0.92 },
+    { "pattern": "databricks",      "vendor": "Databricks",            "category": "data_platform", "confidence": 0.92 },
+    { "pattern": "slack",           "vendor": "Slack",                 "category": "comms",         "confidence": 0.90 },
+    { "pattern": "teams",           "vendor": "Microsoft Teams",       "category": "comms",         "confidence": 0.80 },
+    { "pattern": "jira",            "vendor": "Atlassian Jira",        "category": "pm",            "confidence": 0.90 },
+    { "pattern": "confluence",      "vendor": "Atlassian Confluence",  "category": "docs",          "confidence": 0.90 },
+    { "pattern": "notion",          "vendor": "Notion",                "category": "docs",          "confidence": 0.90 },
+    { "pattern": "tableau",         "vendor": "Tableau",               "category": "bi",            "confidence": 0.92 },
+    { "pattern": "looker",          "vendor": "Looker / Google",       "category": "bi",            "confidence": 0.90 },
+    { "pattern": "dbt",             "vendor": "dbt Labs",              "category": "data_transform","confidence": 0.88 },
+    { "pattern": "fivetran",        "vendor": "Fivetran",              "category": "etl",           "confidence": 0.90 },
+    { "pattern": "mulesoft",        "vendor": "MuleSoft / Salesforce", "category": "integration",   "confidence": 0.90 },
+    { "pattern": "boomi",           "vendor": "Dell Boomi",            "category": "integration",   "confidence": 0.88 },
+    { "pattern": "pagerduty",       "vendor": "PagerDuty",             "category": "incident",      "confidence": 0.95 },
+    { "pattern": "statuspage",      "vendor": "Atlassian Statuspage",  "category": "status",        "confidence": 0.90 },
+    { "pattern": "cloudflare",      "vendor": "Cloudflare",            "category": "cdn",           "confidence": 0.88 },
+    { "pattern": "fastly",          "vendor": "Fastly",                "category": "cdn",           "confidence": 0.90 }
+  ],
+
+  "path_patterns": [
+    { "pattern": "/integrations/stripe",  "vendor": "Stripe",          "category": "payments" },
+    { "pattern": "/integrations/salesforce", "vendor": "Salesforce",   "category": "crm" },
+    { "pattern": "/integrations/hubspot", "vendor": "HubSpot",         "category": "crm" },
+    { "pattern": "/integrations/slack",   "vendor": "Slack",           "category": "comms" },
+    { "pattern": "/docs/api/",            "vendor": null,              "category": "api_launch" },
+    { "pattern": "/status/",              "vendor": null,              "category": "infrastructure" }
+  ]
+}
