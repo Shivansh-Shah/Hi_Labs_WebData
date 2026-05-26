@@ -9,8 +9,8 @@ anyio==4.4.0
 # ── Certificate Transparency (free WebSocket stream) ─
 certstream==1.11
 
-# ── Google Gemini (FREE AI layer — replaces Anthropic) ─
-google-generativeai==0.8.3
+# ── Google Gemini (FREE AI layer — uses new google-genai SDK) ─
+google-genai>=2.0.0
 
 # ── Async workers ──────────────────────────────────
 celery==5.4.0
@@ -35,12 +35,20 @@ networkx==3.3
 python-whois==0.9.4
 
 # ── Web framework (Stage 6) ────────────────────────
-fastapi==0.111.0
-uvicorn[standard]==0.30.1
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9    # multipart form support
 
 # ── Database (Stage 6) ─────────────────────────────
-asyncpg==0.29.0
-sqlalchemy[asyncio]==2.0.31
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9     # PostgreSQL driver (sync)
+alembic>=1.13.0             # schema migrations
+
+# ── Stage 6 delivery ───────────────────────────────
+resend>=2.0.0               # transactional email (Resend API)
+
+# ── OpenAI (Stage 5) ───────────────────────────────
+openai>=1.0.0
 
 # ── Utils ──────────────────────────────────────────
 cryptography==42.0.8

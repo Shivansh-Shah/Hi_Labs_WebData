@@ -160,31 +160,44 @@ class PipelineRunner:
         )
         return deduped
 
-    async def run_full_pipeline(self, window_days: int = 30):
+    async def run_full_pipeline(self, window_days: int = 30, enrich: bool = True):
         """
-        Full Stages 1 → 2 → 3 → 4 pipeline.
+        Full Stages 1 → 2 → 3 → 4 → 5 pipeline.
 
         Returns
         -------
-        tuple[list[Signal], list[DealCluster]]
+        tuple[list[Signal], list[DealCluster], list[DealIntelligenceObject]]
 
         Usage
         -----
-            signals, clusters = await runner.run_full_pipeline()
-            for c in clusters:
-                print(c.summary, c.tier.value)
+            signals, clusters, intel = await runner.run_full_pipeline()
+            for obj in intel:
+                print(obj.target_company, obj.suspected_vendor, obj.outreach_window)
         """
         from stage4_correlation.correlation_engine import CorrelationEngine, cluster_report
+        from stage5_ai_enrichment import AIEnricher, intelligence_report
+        from models.signal import ConfidenceTier
 
         signals = await self.run_once()
         if not signals:
-            logger.warning("[PIPELINE] No signals — skipping Stage 3/4")
-            return signals, []
+            logger.warning("[PIPELINE] No signals — skipping Stage 3/4/5")
+            return signals, [], []
 
         engine = CorrelationEngine(window_days=window_days)
         clusters = await engine.correlate_raw(signals)
         logger.info("\n%s", cluster_report(clusters))
-        return signals, clusters
+
+        if not enrich or not clusters:
+            return signals, clusters, []
+
+        try:
+            enricher = AIEnricher(min_tier=ConfidenceTier.LOW)
+            intel_objects = await enricher.enrich_clusters(clusters)
+            logger.info("\n%s", intelligence_report(intel_objects))
+            return signals, clusters, intel_objects
+        except ValueError as exc:
+            logger.warning("[PIPELINE] Stage 5 skipped: %s", exc)
+            return signals, clusters, []
 
     async def run_stream(self) -> None:
         """Long-running mode: certstream + periodic batch."""

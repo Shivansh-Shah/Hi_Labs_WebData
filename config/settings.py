@@ -3,10 +3,11 @@ config/settings.py
 ------------------
 Centralised configuration loaded from environment variables.
 
-Budget strategy:
-  - Bright Data: $250 credit — FALLBACK ONLY after free APIs fail
-  - Gemini API:  Free tier (1500 req/day, 1M TPM) — PRIMARY AI layer
-  - All other collectors: Free APIs first, paid as last resort
+Bright Data strategy:
+  - MCP server  : https://mcp.brightdata.com/mcp?token=...  (Claude Code tools)
+  - REST API    : POST https://api.brightdata.com/request   (Python code)
+  - SERP zone   : handles both Google SERP and general content fetching
+  - Web Unlocker: not available — SERP zone used as the single BD gateway
 """
 from __future__ import annotations
 
@@ -19,7 +20,17 @@ load_dotenv()
 
 
 class Settings:
-    # ── Bright Data (PAID — use sparingly, ~$250 budget) ─────────────────────
+    # ── Bright Data — REST API + MCP (primary, bearer token auth) ────────────
+    # Get API token: https://brightdata.com → Account Settings → API token
+    BRIGHT_DATA_API_KEY: str = os.getenv("BRIGHT_DATA_API_KEY", "")
+    # Active zones — SERP zone is the primary gateway (web_unlocker not available)
+    BRIGHT_DATA_WEB_UNLOCKER_ZONE: str = os.getenv("BRIGHT_DATA_WEB_UNLOCKER_ZONE", "")
+    BRIGHT_DATA_SERP_ZONE: str = os.getenv("BRIGHT_DATA_SERP_ZONE", "serp_api")
+    BRIGHT_DATA_SCRAPING_BROWSER_ZONE: str = os.getenv("BRIGHT_DATA_SCRAPING_BROWSER_ZONE", "")
+    # Hosted MCP server URL — used by Claude Code agent for direct tool access
+    BRIGHT_DATA_MCP_URL: str = os.getenv("BRIGHT_DATA_MCP_URL", "")
+
+    # ── Bright Data — legacy proxy credentials (fallback if REST API fails) ───
     BRIGHT_DATA_USERNAME: str = os.getenv("BRIGHT_DATA_USERNAME", "")
     BRIGHT_DATA_PASSWORD: str = os.getenv("BRIGHT_DATA_PASSWORD", "")
     BRIGHT_DATA_HOST: str = os.getenv("BRIGHT_DATA_HOST", "brd.superproxy.io")
@@ -37,7 +48,12 @@ class Settings:
     BRIGHT_DATA_COST_SERP: float = 0.005            # ~$5/1000 req
     BRIGHT_DATA_COST_BROWSER_SESSION: float = 0.10  # ~$0.10/session
 
-    # ── Google Gemini (FREE — primary AI layer) ───────────────────────────────
+    # ── OpenAI (Stage 5 AI Enrichment — gpt-4o-mini) ─────────────────────────
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    OPENAI_MAX_TOKENS: int = int(os.getenv("OPENAI_MAX_TOKENS", "600"))
+
+    # ── Google Gemini (MCP agent) ─────────────────────────────────────────────
     # Get free key at: https://aistudio.google.com/apikey
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
@@ -91,8 +107,30 @@ class Settings:
         )
 
     @property
+    def bright_data_active_zone(self) -> str:
+        """Return the best available BD zone — SERP first, then Web Unlocker."""
+        return self.BRIGHT_DATA_SERP_ZONE or self.BRIGHT_DATA_WEB_UNLOCKER_ZONE or ""
+
+    @property
+    def bright_data_mcp_url(self) -> str:
+        """Full BD hosted MCP server URL with auth token embedded."""
+        if self.BRIGHT_DATA_MCP_URL:
+            return self.BRIGHT_DATA_MCP_URL
+        if self.BRIGHT_DATA_API_KEY:
+            return f"https://mcp.brightdata.com/mcp?token={self.BRIGHT_DATA_API_KEY}"
+        return ""
+
+    @property
     def has_bright_data(self) -> bool:
-        return bool(self.BRIGHT_DATA_USERNAME and self.BRIGHT_DATA_PASSWORD)
+        return bool(self.BRIGHT_DATA_API_KEY or (self.BRIGHT_DATA_USERNAME and self.BRIGHT_DATA_PASSWORD))
+
+    @property
+    def has_bright_data_mcp(self) -> bool:
+        return bool(self.BRIGHT_DATA_API_KEY)
+
+    @property
+    def has_openai(self) -> bool:
+        return bool(self.OPENAI_API_KEY)
 
     @property
     def has_gemini(self) -> bool:

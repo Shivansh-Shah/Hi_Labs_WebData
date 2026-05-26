@@ -31,3 +31,12 @@ __pycache__/
 # Bright Data / Output
 signals.json
 output/
+
+# Node
+node_modules/
+dist/
+.npm/
+
+# Database
+*.db
+*.sqlite

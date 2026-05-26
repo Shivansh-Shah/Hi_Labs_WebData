@@ -3,13 +3,12 @@ stage2_bright_data/serp_api.py
 --------------------------------
 SERP intelligence layer.
 
-Free-first strategy:
-  1. DuckDuckGo HTML scraping   — completely free, no key, good results
-  2. SerpDog (free tier)         — 100 free searches/month with API key (optional)
-  3. Bright Data SERP (paid)     — last resort, budget-gated
+Primary strategy:
+  1. Bright Data SERP (primary)  — Google SERP via REST API, budget-gated
+  2. DuckDuckGo HTML scraping    — free fallback if BD unavailable/fails
 
-For subdomain discovery the SERP approach complements DNS enumeration
-by finding subdomains that have web presence (indexed by Google/DDG).
+Routes Google searches through Bright Data's Web Unlocker or SERP zone
+(configured via BRIGHT_DATA_SERP_ZONE or BRIGHT_DATA_WEB_UNLOCKER_ZONE).
 """
 from __future__ import annotations
 
@@ -166,17 +165,21 @@ class DuckDuckGoSearchClient:
         )
 
 
-# ── Source 2: Bright Data SERP (paid, last resort) ────────────────────────────
+# ── Source 2: Bright Data SERP (primary, REST API) ────────────────────────────
+
+_BD_REST_API = "https://api.brightdata.com/request"
 
 
 class BrightDataSERPClient:
     """
-    Bright Data SERP zone — Google results with anti-bot bypass.
-    ONLY used when DuckDuckGo results are insufficient.
-    Always checks budget before firing.
+    Bright Data SERP via REST API — Google results with anti-bot bypass.
+    Uses bearer token authentication (BRIGHT_DATA_API_KEY).
+
+    Routes Google searches through the configured SERP zone (or Web Unlocker
+    zone as fallback) and requests structured JSON results via brd_json=1.
     """
 
-    _GOOGLE_URL = "https://www.google.com/search"
+    _GOOGLE_SEARCH_URL = "https://www.google.com/search"
 
     async def search(
         self, query: str, num_results: int = 30, country: str = "us"
@@ -186,26 +189,62 @@ class BrightDataSERPClient:
             logger.warning("[BD-SERP] Budget gate blocked search for '%s'", query)
             return SERPResponse(query=query, total_results=0, organic=[], source="blocked_budget")
 
-        guard.record_spend(BDRequestType.SERP)
-        proxy = settings.bright_data_serp_proxy_url
+        if not settings.BRIGHT_DATA_API_KEY:
+            logger.warning("[BD-SERP] No BRIGHT_DATA_API_KEY configured")
+            return SERPResponse(query=query, total_results=0, organic=[], source="no_key")
 
+        guard.record_spend(BDRequestType.SERP)
+
+        # Build Google URL with structured JSON output flag
+        encoded_query = query.replace(" ", "+")
+        google_url = (
+            f"{self._GOOGLE_SEARCH_URL}"
+            f"?q={encoded_query}&num={num_results}&gl={country}&brd_json=1"
+        )
+
+        # Use SERP zone (only active zone — web_unlocker not available)
+        zones_to_try = [z for z in [settings.BRIGHT_DATA_SERP_ZONE] if z]
+
+        for zone in zones_to_try:
+            result = await self._fetch_serp(query, google_url, zone, num_results)
+            if result is not None:
+                return result
+
+        logger.error("[BD-SERP] All zones failed for '%s'", query)
+        return SERPResponse(query=query, total_results=0, organic=[], source="error")
+
+    async def _fetch_serp(
+        self, query: str, google_url: str, zone: str, num_results: int
+    ) -> SERPResponse | None:
+        """Attempt a SERP fetch through a specific Bright Data zone."""
         try:
-            async with httpx.AsyncClient(
-                proxies={"http://": proxy, "https://": proxy},
-                timeout=35,
-                verify=False,
-            ) as client:
-                resp = await client.get(
-                    self._GOOGLE_URL,
-                    params={"q": query, "num": num_results, "brd_json": "1", "gl": country},
+            async with httpx.AsyncClient(timeout=35) as client:
+                resp = await client.post(
+                    _BD_REST_API,
+                    headers={
+                        "Authorization": f"Bearer {settings.BRIGHT_DATA_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"zone": zone, "url": google_url, "format": "raw"},
                 )
+
+                if resp.status_code == 404:
+                    logger.warning(
+                        "[BD-SERP] Zone '%s' not found — "
+                        "check BRIGHT_DATA_SERP_ZONE in .env", zone
+                    )
+                    return None
+                if resp.status_code == 401:
+                    logger.error("[BD-SERP] 401 Unauthorized — check BRIGHT_DATA_API_KEY")
+                    return None
+
                 resp.raise_for_status()
 
+                # Parse structured JSON (brd_json=1) or fall back to regex
                 try:
                     data = resp.json()
                     organic_raw = data.get("organic", [])
                 except Exception:
-                    # Fallback: regex extract URLs from HTML
                     organic_raw = []
                     for url in re.findall(r'href="(https?://[^"&]+)"', resp.text):
                         if "google.com" not in url:
@@ -225,30 +264,31 @@ class BrightDataSERPClient:
                 ]
 
                 logger.info(
-                    "[BD-SERP] '%s' → %d results (PAID $%.4f)",
-                    query,
-                    len(results),
-                    settings.BRIGHT_DATA_COST_SERP,
+                    "[BD-SERP] '%s' → %d results via zone=%s ($%.4f)",
+                    query, len(results), zone, settings.BRIGHT_DATA_COST_SERP,
                 )
                 return SERPResponse(
                     query=query,
                     total_results=len(results),
                     organic=results,
-                    source="bright_data_google",
+                    source=f"bright_data_{zone}",
                 )
 
+        except httpx.TimeoutException:
+            logger.warning("[BD-SERP] Timeout for '%s' via zone=%s", query, zone)
+            return None
         except Exception as exc:
-            logger.error("[BD-SERP] Failed for '%s': %s", query, exc)
-            return SERPResponse(query=query, total_results=0, organic=[], source="error")
+            logger.error("[BD-SERP] Failed for '%s' via zone=%s: %s", query, zone, exc)
+            return None
 
 
-# ── Unified SERP client (free-first) ──────────────────────────────────────────
+# ── Unified SERP client (BD primary, DDG fallback) ────────────────────────────
 
 
 class SERPClient:
     """
-    Unified SERP client — tries DuckDuckGo first, falls back to Bright Data
-    only when DDG yields fewer than `min_results` results.
+    Unified SERP client — Bright Data is the primary source.
+    DuckDuckGo is used as fallback when BD is unavailable or returns no results.
 
     Usage
     -----
@@ -256,26 +296,20 @@ class SERPClient:
         resp = await client.search("site:*.acme.com integrations")
     """
 
-    def __init__(self, min_results_threshold: int = 3) -> None:
-        self._ddg = DuckDuckGoSearchClient()
+    def __init__(self) -> None:
         self._bd = BrightDataSERPClient()
-        self._min_threshold = min_results_threshold
+        self._ddg = DuckDuckGoSearchClient()
 
     async def search(self, query: str, max_results: int = 30) -> SERPResponse:
-        # Try DDG first (free)
-        resp = await self._ddg.search(query, max_results=max_results)
-        if len(resp.organic) >= self._min_results_threshold:
-            return resp
+        # Primary: Bright Data
+        if settings.BRIGHT_DATA_API_KEY:
+            resp = await self._bd.search(query, num_results=max_results)
+            if resp.organic:
+                return resp
+            logger.info("[SERP] BD returned 0 results for '%s' — trying DuckDuckGo", query)
 
-        logger.info(
-            "[SERP] DDG returned %d results for '%s' — trying Bright Data",
-            len(resp.organic),
-            query,
-        )
-        bd_resp = await self._bd.search(query, num_results=max_results)
-        if bd_resp.organic:
-            return bd_resp
-        return resp  # Return DDG results even if sparse
+        # Fallback: DuckDuckGo (free)
+        return await self._ddg.search(query, max_results=max_results)
 
     async def search_subdomains(self, apex_domain: str) -> list[str]:
         """

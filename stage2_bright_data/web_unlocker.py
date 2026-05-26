@@ -1,16 +1,20 @@
 """
 stage2_bright_data/web_unlocker.py
 ------------------------------------
-Bright Data Web Unlocker — FALLBACK ONLY.
+Bright Data content fetch layer.
 
-Strategy (budget-conscious):
-  1. Try the direct HTTP request first (free)
-  2. Only route through Web Unlocker if direct request fails with 403/429/block
-  3. Check BudgetGuard before every Bright Data request
-  4. Log every spend for accountability
+Strategy:
+  1. Bright Data REST API (primary) — uses bearer token auth against active zone
+     Zone priority: WEB_UNLOCKER_ZONE → SERP_ZONE (serp_api zone doubles as
+     a general unlocker when no dedicated web_unlocker zone is configured)
+  2. Direct HTTP (fallback)         — only if BD fails or key not configured
 
-Cost: ~$0.004 per request. With $250 budget ≈ 62,500 requests maximum.
-Reserve Bright Data for genuinely blocked targets only.
+BD REST API endpoint:
+  POST https://api.brightdata.com/request
+  Authorization: Bearer {BRIGHT_DATA_API_KEY}
+  Body: {"zone": "<active_zone>", "url": "target_url", "format": "raw"}
+
+Cost: ~$0.004–0.005 per request. With $250 budget ≈ 50,000+ requests.
 """
 from __future__ import annotations
 
@@ -26,8 +30,7 @@ from stage2_bright_data.budget_guard import BudgetGuard, BDRequestType
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# Statuses that indicate we need Bright Data's help
-_BLOCK_STATUSES = {403, 429, 503, 407, 401}
+_BD_REST_API = "https://api.brightdata.com/request"
 
 _DIRECT_HEADERS = {
     "User-Agent": (
@@ -41,8 +44,136 @@ _DIRECT_HEADERS = {
     "Connection": "keep-alive",
 }
 
+# HTTP statuses that indicate a site is blocking us
+_BLOCK_STATUSES = {403, 429, 503, 407, 401}
 
-# ── Smart fetch (free first, Bright Data fallback) ────────────────────────────
+
+# ── Bright Data REST API fetch (primary) ─────────────────────────────────────
+
+
+async def _bright_data_rest_fetch(
+    url: str,
+    method: str,
+    timeout: float,
+    json_response: bool,
+    zone: str | None = None,
+    **kwargs,
+) -> httpx.Response | dict | str | None:
+    """
+    Fetch a URL through Bright Data REST API.
+    Uses bearer token authentication — no proxy credentials needed.
+    Zone selection: explicit zone arg → WEB_UNLOCKER_ZONE → SERP_ZONE (fallback).
+    """
+    target_zone = zone or settings.bright_data_active_zone
+    if not target_zone:
+        logger.warning("[BD-FETCH] No BD zone configured — cannot use BD REST API")
+        return None
+    payload = {"zone": target_zone, "url": url, "format": "raw"}
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                _BD_REST_API,
+                headers={
+                    "Authorization": f"Bearer {settings.BRIGHT_DATA_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+
+            if resp.status_code == 400:
+                body = resp.text[:300]
+                logger.error(
+                    "[BD-WEB-UNLOCKER] 400 Bad Request for zone=%s url=%s — %s",
+                    target_zone, url, body,
+                )
+                return None
+            if resp.status_code == 401:
+                logger.error("[BD-WEB-UNLOCKER] 401 Unauthorized — check BRIGHT_DATA_API_KEY")
+                return None
+            if resp.status_code == 404:
+                logger.error(
+                    "[BD-FETCH] 404 — zone '%s' not found. "
+                    "Check BRIGHT_DATA_SERP_ZONE in your .env (currently: %s). "
+                    "Manage zones at https://brightdata.com/cp/zones",
+                    target_zone, settings.BRIGHT_DATA_SERP_ZONE,
+                )
+                return None
+
+            resp.raise_for_status()
+            logger.info("[BD-FETCH] %s → %d (zone=%s)", url, resp.status_code, target_zone)
+            return _parse_response(resp, json_response)
+
+    except httpx.TimeoutException:
+        logger.warning("[BD-FETCH] Timeout for %s (zone=%s)", url, target_zone)
+        return None
+    except Exception as exc:
+        logger.error("[BD-FETCH] REST API failed for %s: %s", url, exc)
+        return None
+
+
+# ── Direct HTTP fetch (fallback) ─────────────────────────────────────────────
+
+
+async def _direct_fetch(
+    url: str,
+    method: str,
+    timeout: float,
+    json_response: bool,
+    **kwargs,
+) -> httpx.Response | dict | str | None:
+    """Direct HTTPS request without any proxy — free fallback."""
+    try:
+        async with httpx.AsyncClient(
+            headers=_DIRECT_HEADERS,
+            timeout=timeout,
+            follow_redirects=True,
+        ) as client:
+            resp = await _do_request(client, method, url, **kwargs)
+            if resp.status_code in _BLOCK_STATUSES:
+                logger.debug("[DIRECT] %s returned %d", url, resp.status_code)
+                return None
+            resp.raise_for_status()
+            logger.debug("[DIRECT] %s → %d (free)", url, resp.status_code)
+            return _parse_response(resp, json_response)
+    except httpx.TimeoutException:
+        logger.debug("[DIRECT] Timeout for %s", url)
+        return None
+    except Exception as exc:
+        logger.debug("[DIRECT] Error for %s: %s", url, exc)
+        return None
+
+
+# ── Legacy proxy fetch (if proxy credentials provided) ───────────────────────
+
+
+async def _bright_data_proxy_fetch(
+    url: str,
+    method: str,
+    timeout: float,
+    json_response: bool,
+    **kwargs,
+) -> httpx.Response | dict | str | None:
+    """Route request through Bright Data proxy (legacy username/password auth)."""
+    proxy_url = settings.bright_data_proxy_url
+    try:
+        async with httpx.AsyncClient(
+            proxies={"http://": proxy_url, "https://": proxy_url},
+            headers=_DIRECT_HEADERS,
+            timeout=timeout,
+            verify=False,
+            follow_redirects=True,
+        ) as client:
+            resp = await _do_request(client, method, url, **kwargs)
+            resp.raise_for_status()
+            logger.info("[BD-PROXY] %s → %d (zone proxy)", url, resp.status_code)
+            return _parse_response(resp, json_response)
+    except Exception as exc:
+        logger.error("[BD-PROXY] Failed for %s: %s", url, exc)
+        return None
+
+
+# ── Smart fetch (BD primary, direct fallback) ─────────────────────────────────
 
 
 async def smart_fetch(
@@ -54,100 +185,55 @@ async def smart_fetch(
     **request_kwargs,
 ) -> httpx.Response | dict | str | None:
     """
-    Fetch a URL using the cheapest available method:
-      1. Direct request (free, always tried first unless force_bright_data)
-      2. Bright Data Web Unlocker (paid fallback if direct is blocked)
+    Fetch a URL — Bright Data is the primary method.
+
+    Priority:
+      1. Bright Data REST API (bearer token)  ← always preferred
+      2. Bright Data proxy (legacy creds)     ← if proxy creds present but no API key
+      3. Direct HTTP                          ← fallback only if BD unavailable/fails
 
     Parameters
     ----------
     url               : target URL
     method            : HTTP verb
-    timeout           : timeout in seconds (shorter for direct, longer for BD)
+    timeout           : timeout in seconds
     json_response     : if True, return parsed JSON dict
-    force_bright_data : skip direct attempt (use for known-blocked sites)
-    **request_kwargs  : passed to httpx
-
-    Returns
-    -------
-    httpx.Response | dict (json) | str (text) | None on total failure
+    force_bright_data : raise immediately if BD is unavailable (no direct fallback)
     """
     guard = BudgetGuard.get_instance()
 
-    # ── Attempt 1: Direct (free) ───────────────────────────────────────────
-    if not force_bright_data:
-        result = await _direct_fetch(url, method, timeout, json_response, **request_kwargs)
+    # ── Primary: Bright Data REST API (bearer token) ──────────────────────
+    if settings.BRIGHT_DATA_API_KEY and guard.can_spend(BDRequestType.WEB_UNLOCKER):
+        guard.record_spend(BDRequestType.WEB_UNLOCKER)
+        result = await _bright_data_rest_fetch(
+            url, method, timeout + 25, json_response, **request_kwargs
+        )
         if result is not None:
             return result
-        logger.debug("[SMART-FETCH] Direct failed for %s — checking BD fallback", url)
+        logger.warning("[SMART-FETCH] BD REST API failed for %s — trying fallback", url)
 
-    # ── Attempt 2: Bright Data fallback (paid) ────────────────────────────
-    if not guard.can_spend(BDRequestType.WEB_UNLOCKER):
-        logger.warning(
-            "[SMART-FETCH] Budget exhausted — no fallback available for %s", url
+    # ── Fallback A: Legacy proxy credentials ──────────────────────────────
+    elif settings.BRIGHT_DATA_USERNAME and settings.BRIGHT_DATA_PASSWORD:
+        if guard.can_spend(BDRequestType.WEB_UNLOCKER):
+            guard.record_spend(BDRequestType.WEB_UNLOCKER)
+            result = await _bright_data_proxy_fetch(
+                url, method, timeout + 25, json_response, **request_kwargs
+            )
+            if result is not None:
+                return result
+
+    if force_bright_data:
+        logger.error(
+            "[SMART-FETCH] force_bright_data=True but BD unavailable/failed for %s", url
         )
         return None
 
-    guard.record_spend(BDRequestType.WEB_UNLOCKER)
-    return await _bright_data_fetch(url, method, timeout + 25, json_response, **request_kwargs)
+    # ── Fallback B: Direct HTTP (free) ────────────────────────────────────
+    logger.debug("[SMART-FETCH] Using direct HTTP for %s", url)
+    return await _direct_fetch(url, method, timeout, json_response, **request_kwargs)
 
 
-async def _direct_fetch(
-    url: str,
-    method: str,
-    timeout: float,
-    json_response: bool,
-    **kwargs,
-) -> httpx.Response | dict | str | None:
-    """Attempt a direct HTTPS request without any proxy."""
-    try:
-        async with httpx.AsyncClient(
-            headers=_DIRECT_HEADERS,
-            timeout=timeout,
-            follow_redirects=True,
-        ) as client:
-            resp = await _do_request(client, method, url, **kwargs)
-            if resp.status_code in _BLOCK_STATUSES:
-                logger.debug(
-                    "[DIRECT] %s returned %d — will fallback",
-                    url,
-                    resp.status_code,
-                )
-                return None
-            resp.raise_for_status()
-            logger.debug("[DIRECT] %s → %d", url, resp.status_code)
-            return _parse_response(resp, json_response)
-    except httpx.TimeoutException:
-        logger.debug("[DIRECT] Timeout for %s", url)
-        return None
-    except Exception as exc:
-        logger.debug("[DIRECT] Error for %s: %s", url, exc)
-        return None
-
-
-async def _bright_data_fetch(
-    url: str,
-    method: str,
-    timeout: float,
-    json_response: bool,
-    **kwargs,
-) -> httpx.Response | dict | str | None:
-    """Route request through Bright Data Web Unlocker proxy."""
-    proxy_url = settings.bright_data_proxy_url
-    try:
-        async with httpx.AsyncClient(
-            proxies={"http://": proxy_url, "https://": proxy_url},
-            headers=_DIRECT_HEADERS,
-            timeout=timeout,
-            verify=False,  # BD terminates TLS
-            follow_redirects=True,
-        ) as client:
-            resp = await _do_request(client, method, url, **kwargs)
-            resp.raise_for_status()
-            logger.info("[BD-WEB-UNLOCKER] %s → %d (paid)", url, resp.status_code)
-            return _parse_response(resp, json_response)
-    except Exception as exc:
-        logger.error("[BD-WEB-UNLOCKER] Failed for %s: %s", url, exc)
-        return None
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 async def _do_request(
@@ -180,25 +266,17 @@ async def fetch_with_retry(
     base_delay: float = 1.5,
     **smart_fetch_kwargs,
 ) -> Any | None:
-    """
-    Call smart_fetch with exponential backoff on transient failures.
-    Respects the budget gate — won't burn retries on budget-exceeded state.
-    """
-    last_exc: Exception | None = None
+    """smart_fetch with exponential backoff."""
     for attempt in range(max_retries):
-        try:
-            result = await smart_fetch(url, **smart_fetch_kwargs)
-            if result is not None:
-                return result
-        except Exception as exc:
-            last_exc = exc
-
+        result = await smart_fetch(url, **smart_fetch_kwargs)
+        if result is not None:
+            return result
         if attempt < max_retries - 1:
             delay = base_delay * (2 ** attempt)
             logger.debug("[FETCH-RETRY] Attempt %d failed — retrying in %.1fs", attempt + 1, delay)
             await asyncio.sleep(delay)
 
-    logger.warning("[FETCH-RETRY] All %d attempts failed for %s: %s", max_retries, url, last_exc)
+    logger.warning("[FETCH-RETRY] All %d attempts failed for %s", max_retries, url)
     return None
 
 
@@ -210,12 +288,7 @@ async def batch_fetch(
     concurrency: int = 8,
     **smart_fetch_kwargs,
 ) -> list[tuple[str, Any]]:
-    """
-    Fetch multiple URLs concurrently using smart_fetch (free-first strategy).
-    Returns [(url, result_or_None)] preserving order.
-
-    Higher concurrency than before since most requests are direct (free).
-    """
+    """Fetch multiple URLs concurrently via smart_fetch."""
     semaphore = asyncio.Semaphore(concurrency)
 
     async def _one(url: str) -> tuple[str, Any]:

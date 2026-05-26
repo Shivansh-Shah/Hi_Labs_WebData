@@ -1,0 +1,102 @@
+[
+  {
+    "intelligence_id": "intel-acme-001",
+    "cluster_id": "cluster-acme-001",
+    "target_company": "acme.com",
+    "suspected_vendor": "Salesforce",
+    "vendor_category": "crm",
+    "confidence": 0.8844,
+    "tier": "high",
+    "deal_closed_estimate": "April 2026",
+    "outreach_window": "Oct–Dec 2026",
+    "reasoning": "Multiple corroborating signals over a 21-day window point to Salesforce adoption at acme.com. A DigiCert-issued certificate for crm.acme.com appeared April 14, corroborated by a new salesforce.acme.com subdomain discovered via DNS enumeration. The /integrations page was updated within the same window.",
+    "signals": [
+      "New cert for crm.acme.com issued by DigiCert (April 14, 2026)",
+      "New subdomain salesforce.acme.com detected via DNS (April 16, 2026)",
+      "Integration page updated: /integrations now lists Salesforce (April 18, 2026)"
+    ],
+    "new_vendor_patterns": [
+      {
+        "pattern": "gong",
+        "vendor": "Gong.io",
+        "category": "sales_intel",
+        "confidence": 0.85
+      }
+    ],
+    "enriched_at": "2026-05-01T14:23:00Z",
+    "model_used": "gpt-4o-mini",
+    "input_tokens": 580,
+    "output_tokens": 196,
+    "estimated_cost_usd": 0.000205,
+    "metadata": {
+      "stage4_confidence": 0.82,
+      "stage4_tier": "high",
+      "llm_raw_confidence": 0.91,
+      "blended_confidence": 0.8844
+    }
+  },
+  {
+    "intelligence_id": "intel-rival-001",
+    "cluster_id": "cluster-rival-001",
+    "target_company": "rival.io",
+    "suspected_vendor": "Stripe",
+    "vendor_category": "payments",
+    "confidence": 0.7660,
+    "tier": "medium",
+    "deal_closed_estimate": "March 2026",
+    "outreach_window": "Sep–Nov 2026",
+    "reasoning": "A certificate for payments.rival.io was issued by Let's Encrypt in late March, and the /pricing page now references Stripe Checkout. Single-source confirmation keeps confidence in the medium band.",
+    "signals": [
+      "New cert for payments.rival.io issued by Let's Encrypt (March 28, 2026)",
+      "Pricing page content change: Stripe Checkout mentioned (March 30, 2026)"
+    ],
+    "new_vendor_patterns": [],
+    "enriched_at": "2026-05-01T14:25:00Z",
+    "model_used": "gpt-4o-mini",
+    "input_tokens": 490,
+    "output_tokens": 155,
+    "estimated_cost_usd": 0.000166,
+    "metadata": {
+      "stage4_confidence": 0.68,
+      "stage4_tier": "medium",
+      "llm_raw_confidence": 0.83,
+      "blended_confidence": 0.766
+    }
+  },
+  {
+    "intelligence_id": "intel-beta-001",
+    "cluster_id": "cluster-beta-001",
+    "target_company": "betacorp.com",
+    "suspected_vendor": "Okta",
+    "vendor_category": "identity",
+    "confidence": 0.8920,
+    "tier": "high",
+    "deal_closed_estimate": "February 2026",
+    "outreach_window": "Aug–Oct 2026",
+    "reasoning": "Three independent signals confirm Okta deployment at betacorp.com: a new certificate for sso.betacorp.com, an okta.betacorp.com subdomain found via SERP, and a GitHub commit referencing okta-sdk in the company's public engineering repo.",
+    "signals": [
+      "New cert for sso.betacorp.com issued by DigiCert (Feb 12, 2026)",
+      "New subdomain okta.betacorp.com discovered via SERP (Feb 15, 2026)",
+      "GitHub commit: added okta-sdk dependency in betacorp/platform (Feb 18, 2026)"
+    ],
+    "new_vendor_patterns": [
+      {
+        "pattern": "sso",
+        "vendor": "Okta",
+        "category": "identity",
+        "confidence": 0.80
+      }
+    ],
+    "enriched_at": "2026-05-01T14:27:00Z",
+    "model_used": "gpt-4o-mini",
+    "input_tokens": 612,
+    "output_tokens": 210,
+    "estimated_cost_usd": 0.000218,
+    "metadata": {
+      "stage4_confidence": 0.88,
+      "stage4_tier": "high",
+      "llm_raw_confidence": 0.90,
+      "blended_confidence": 0.892
+    }
+  }
+]
