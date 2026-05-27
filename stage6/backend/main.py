@@ -28,6 +28,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from .database import Base, engine
 from .routes.deals import router as deals_router
 from .routes.digest import router as digest_router
+from .routes.sniper import router as sniper_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -80,8 +81,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(deals_router,  prefix="/api")
-app.include_router(digest_router, prefix="/api")
+app.include_router(deals_router,   prefix="/api")
+app.include_router(digest_router,  prefix="/api")
+app.include_router(sniper_router,  prefix="/api")
 
 
 # ── Health & root ─────────────────────────────────────────────────────────────
