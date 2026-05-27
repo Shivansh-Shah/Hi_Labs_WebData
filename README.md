@@ -601,6 +601,141 @@ web_data_labai/
 
 ---
 
+## Idea 2 — Launch Sniper (`idea 2/launch_sniper/`)
+
+> **Detect unreleased competitor product launches** from WHOIS registrations, USPTO trademark filings, and robots.txt changes — fully independent module, no overlap with the GTM platform above.
+
+### How it Works
+
+```
+Competitor Domains
+      │
+      ▼
+┌─────────────────────────────────────────────────────┐
+│  STAGE 1 — Signal Collection (3 collectors)          │
+│  WHOIS (new domain registrations by same org)        │
+│  Trademark (USPTO IBD API — 60-day lookback)         │
+│  Robots.txt (new suspicious Disallow paths)          │
+└────────────────────┬────────────────────────────────┘
+                     │  Signal objects
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│  STAGE 2 — Bright Data MCP                          │
+│  search_engine + scrape_as_markdown tools           │
+│  Budget guard: warn at 80, hard-stop at 100 calls   │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│  STAGE 3 — Signal Parsing                           │
+│  WHOIS → suspected product from new domain name     │
+│  Trademark → product category (9-keyword table)     │
+│  Robots.txt → product hint from Disallow path       │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│  STAGE 4 — Correlation Engine                       │
+│  Groups signals by competitor domain                │
+│  Confidence: 1 source=0.5 / 2=0.7 / 3=0.9         │
+└────────────────────┬────────────────────────────────┘
+                     │  Clusters
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│  STAGE 5 — AI Enrichment (gpt-4o-mini)              │
+│  Suspected product, estimated launch date,          │
+│  confidence adjustment, counter-playbook            │
+└────────────────────┬────────────────────────────────┘
+                     │  LaunchIntelligenceObjects
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│  STAGE 6 — Delivery                                 │
+│  Markdown report saved to disk                      │
+│  Email via Resend API → Gmail SMTP fallback         │
+│  Supabase PostgreSQL persistence (deduped by run)   │
+│  Slack webhook (optional)                           │
+└─────────────────────────────────────────────────────┘
+```
+
+### Setup
+
+```bash
+cd "idea 2/launch_sniper"
+pip install -r requirements.txt
+
+# Edit .env — minimum required keys:
+# BRIGHT_DATA_MCP_TOKEN, OPENAI_API_KEY
+```
+
+### Run
+
+```bash
+# Monitor any competitor domains
+python main.py --domains salesforce.com,hubspot.com
+
+# Save report to custom path
+python main.py --domains notion.com,linear.app --output reports/today.md
+
+# Suppress verbose logs
+python main.py --domains acme.com --quiet
+
+# Also send Slack alerts (requires SLACK_WEBHOOK_URL in .env)
+python main.py --domains acme.com --slack
+```
+
+### Environment Variables (idea 2)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BRIGHT_DATA_MCP_TOKEN` | Yes | Bright Data MCP token — WHOIS searches + robots.txt fetching |
+| `OPENAI_API_KEY` | Yes | gpt-4o-mini — Stage 5 enrichment (~$0.0002/cluster) |
+| `RESEND_API_KEY` | Optional | Email delivery of the report |
+| `GMAIL_USER` + `GMAIL_APP_PASSWORD` | Optional | Gmail SMTP fallback for email delivery |
+| `REPORT_EMAIL` | Optional | Recipient address (defaults to `GMAIL_USER`) |
+| `DATABASE_URL` | Optional | Supabase PostgreSQL — persists signals + results across runs |
+| `SLACK_WEBHOOK_URL` | Optional | Slack alerts for high-confidence (≥80%) detections |
+
+### File Structure
+
+```
+idea 2/launch_sniper/
+├── main.py                              # CLI entry point (--domains, --output, --slack, --quiet)
+├── requirements.txt
+├── .env                                 # credentials (gitignored)
+│
+├── models/
+│   ├── signal.py                        # Signal dataclass + SignalSource/SignalType enums
+│   └── launch_intelligence.py          # LaunchIntelligenceObject + CounterPlaybook
+│
+├── collectors/
+│   ├── whois_collector.py              # python-whois + BrightData MCP search
+│   ├── trademark_collector.py          # USPTO IBD API with retry
+│   └── robots_txt_collector.py        # BrightData MCP scrape + diff vs. cached state
+│
+├── stage2_brightdata/
+│   └── mcp_client.py                   # SSE MCP client, budget guard, retry logic
+│
+├── stage3_parsing/
+│   └── parser_orchestrator.py         # Concurrent signal enrichment
+│
+├── stage4_correlation/
+│   └── correlation_engine.py          # Groups + scores clusters by domain
+│
+├── stage5_enrichment/
+│   └── launch_enricher.py             # GPT-4o-mini JSON enrichment per cluster
+│
+├── stage6_delivery/
+│   ├── report_generator.py            # Markdown report builder
+│   ├── email_notifier.py              # Resend + Gmail SMTP fallback
+│   ├── db_writer.py                   # Supabase PostgreSQL writer (deduped signals)
+│   └── slack_notifier.py             # Slack webhook alerts
+│
+└── state/
+    └── robots_cache.json              # Persists robots.txt between runs (gitignored)
+```
+
+---
+
 ## Roadmap
 
 | Stage | Status | Description |
