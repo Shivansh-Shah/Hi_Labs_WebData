@@ -1,0 +1,7 @@
+.env
+state/
+idea2/output/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
