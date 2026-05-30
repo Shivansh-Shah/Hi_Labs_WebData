@@ -12,6 +12,7 @@ ReDoc:       http://localhost:8000/redoc
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -67,7 +68,9 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Allow Vite dev server (5173) and any localhost port
+# Allow Vite dev server + any origins passed via ALLOWED_ORIGINS env var
+# (comma-separated, e.g. "https://gtm-intel.vercel.app,https://www.gtm-intel.com")
+_extra = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -75,6 +78,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
+        *_extra,
     ],
     allow_credentials=True,
     allow_methods=["*"],

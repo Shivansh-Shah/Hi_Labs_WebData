@@ -4,7 +4,9 @@ import { motion } from 'motion/react'
 import { HolographicCard } from './components/ui/holographic-card'
 import LandingPage from './LandingPage'
 
-const API = '/api'
+// In dev Vite proxies /api → localhost:8000.
+// In production set VITE_API_URL=https://your-backend.railway.app
+const API = `${import.meta.env.VITE_API_URL || ''}/api`
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const BG         = '#0a0b10'
