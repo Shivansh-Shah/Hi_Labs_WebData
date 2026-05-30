@@ -25,8 +25,8 @@ python-dotenv==1.0.1
 playwright==1.44.0
 
 # ── Data processing (Stage 3+) ─────────────────────
-pandas==2.2.2
-spacy==3.7.5
+pandas>=2.2.0
+spacy>=3.7.0
 
 # ── Graph clustering (Stage 4) ─────────────────────
 networkx==3.3
@@ -51,8 +51,8 @@ resend>=2.0.0               # transactional email (Resend API)
 openai>=1.0.0
 
 # ── Utils ──────────────────────────────────────────
-cryptography==42.0.8
-typing-extensions==4.12.2
+cryptography>=42.0.0
+typing-extensions>=4.12.0
 
 # ── Dev / testing ──────────────────────────────────
 pytest==8.2.2
