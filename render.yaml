@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: gtm-intel-api
+    runtime: python
+    region: oregon          # closest to US; change to "frankfurt" for EU
+    plan: starter           # $7/mo — no sleep, 512 MB RAM, 0.5 CPU
+    # plan: free            # free but sleeps after 15 min of inactivity
+
+    buildCommand: |
+      pip install --upgrade pip &&
+      pip install -r requirements.txt &&
+      python -m spacy download en_core_web_sm || true
+
+    startCommand: uvicorn stage6.backend.main:app --host 0.0.0.0 --port $PORT
+
+    healthCheckPath: /health
+
+    # All values marked sync:false must be set manually in the Render dashboard
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # postgresql://postgres:...@supabase.co:6543/postgres
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: BRIGHT_DATA_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false          # set AFTER Vercel deploy: https://your-app.vercel.app
+      - key: PYTHON_VERSION
+        value: "3.11.0"
