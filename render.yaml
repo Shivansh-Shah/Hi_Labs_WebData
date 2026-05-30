@@ -23,3 +23,9 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        sync: false

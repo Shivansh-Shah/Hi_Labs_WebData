@@ -8,7 +8,7 @@ GET  /api/sniper/runs            — list all recent runs (newest first)
 GET  /api/sniper/status/{run_id} — status + output for a specific run
 GET  /api/sniper/stats           — aggregate stats across all runs
 GET  /api/sniper/results         — all detected launches (filterable)
-POST /api/sniper/email           — send sniper report via Gmail SMTP
+POST /api/sniper/email           — send sniper report via Brevo API
 """
 from __future__ import annotations
 
@@ -16,17 +16,16 @@ import asyncio
 import logging
 import os
 import re
-import smtplib
 import sys
 import uuid
 from datetime import datetime, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+from ..email_utils import send_email
 
 router = APIRouter(tags=["sniper"], prefix="/sniper")
 logger = logging.getLogger(__name__)
@@ -406,19 +405,7 @@ def get_run_status(run_id: str):
 
 @router.post("/email")
 def send_sniper_email(req: SniperEmailRequest):
-    """Send a Launch Sniper intelligence report via Gmail SMTP."""
-    gmail_user = os.getenv("GMAIL_USER", "")
-    gmail_pass = os.getenv("GMAIL_APP_PASSWORD", "")
-    if not gmail_user or not gmail_pass:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "GMAIL_USER or GMAIL_APP_PASSWORD not configured. "
-                "Add both to .env and restart the server."
-            ),
-        )
-
-    # Collect results
+    """Send a Launch Sniper intelligence report via Brevo Transactional Email API."""
     target_runs = (
         [_runs[req.run_id]] if req.run_id and req.run_id in _runs
         else [r for r in _runs.values() if r["status"] == "completed"]
@@ -434,33 +421,21 @@ def send_sniper_email(req: SniperEmailRequest):
 
     run_date  = datetime.now(timezone.utc).strftime("%B %d, %Y")
     html_body = _build_sniper_html(all_results, run_date)
-
     tier_label = req.tier_filter.upper() if req.tier_filter else "ALL"
     subject    = (
         f"Launch Sniper: {len(all_results)} {tier_label} competitor signal"
         f"{'s' if len(all_results) != 1 else ''} — {run_date}"
     )
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = f"GTM Intel <{gmail_user}>"
-    msg["To"]      = req.to_email
-    msg.attach(MIMEText(html_body, "html"))
-
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(gmail_user, gmail_pass.replace(" ", ""))
-            smtp.sendmail(gmail_user, req.to_email, msg.as_string())
+        result = send_email(to=req.to_email, subject=subject, html=html_body)
         logger.info("[SNIPER EMAIL] Sent to %s — %d results", req.to_email, len(all_results))
-        return {"sent": True, "to": req.to_email, "count": len(all_results)}
-    except smtplib.SMTPAuthenticationError:
-        raise HTTPException(
-            status_code=401,
-            detail="Gmail auth failed — check GMAIL_USER and GMAIL_APP_PASSWORD in .env",
-        )
-    except Exception as exc:
-        logger.error("[SNIPER EMAIL] SMTP error: %s", exc)
-        raise HTTPException(status_code=500, detail=f"SMTP error: {exc}")
+        return {"sent": True, "to": req.to_email, "count": len(all_results), **result}
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except RuntimeError as exc:
+        logger.error("[SNIPER EMAIL] Brevo error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # ── Background worker ──────────────────────────────────────────────────────────

@@ -1,29 +1,26 @@
 """
 stage6/backend/routes/digest.py
 ---------------------------------
-Email digest endpoints (Gmail SMTP).
+Email digest endpoints (Brevo Transactional Email API).
 
 GET  /api/digest/preview   — returns HTML body + record count (no email sent)
-POST /api/digest/send      — sends email via Gmail SMTP + App Password
+POST /api/digest/send      — sends email via Brevo API (HTTPS, works on Render)
 
 Add to .env:
-    GMAIL_USER=you@gmail.com
-    GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+    BREVO_API_KEY=your-brevo-api-key
+    BREVO_SENDER_EMAIL=you@gmail.com   (must be verified in Brevo dashboard)
 """
 from __future__ import annotations
 
 import logging
-import os
-import smtplib
 from datetime import datetime, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..email_utils import send_email
 from ..models import DealIntelligenceDB, DigestRequest
 
 router = APIRouter(tags=["digest"])
@@ -207,22 +204,7 @@ def preview_digest(
 
 @router.post("/digest/send")
 def send_digest(req: DigestRequest, db: Session = Depends(get_db)):
-    """
-    Send an HTML email digest via Gmail SMTP.
-    Requires GMAIL_USER and GMAIL_APP_PASSWORD in .env.
-    """
-    gmail_user = os.getenv("GMAIL_USER", "")
-    gmail_pass = os.getenv("GMAIL_APP_PASSWORD", "")
-    if not gmail_user or not gmail_pass:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "GMAIL_USER or GMAIL_APP_PASSWORD not configured. "
-                "Add both to .env — generate an App Password at "
-                "https://myaccount.google.com/apppasswords"
-            ),
-        )
-
+    """Send an HTML email digest via Brevo Transactional Email API."""
     records = (
         db.query(DealIntelligenceDB)
         .filter(DealIntelligenceDB.tier == req.tier_filter.lower())
@@ -244,29 +226,12 @@ def send_digest(req: DigestRequest, db: Session = Depends(get_db)):
         f"{datetime.now(timezone.utc).strftime('%b %d, %Y')}"
     )
 
-    # Build MIME message
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = f"GTM Intel <{gmail_user}>"
-    msg["To"]      = req.to_email
-    msg.attach(MIMEText(html_body, "html"))
-
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(gmail_user, gmail_pass.replace(" ", ""))
-            smtp.sendmail(gmail_user, req.to_email, msg.as_string())
-
-        logger.info("[DIGEST] Sent to %s via Gmail SMTP", req.to_email)
-        return {
-            "sent":  True,
-            "to":    req.to_email,
-            "count": len(records),
-        }
-    except smtplib.SMTPAuthenticationError:
-        raise HTTPException(
-            status_code=401,
-            detail="Gmail authentication failed — check GMAIL_USER and GMAIL_APP_PASSWORD in .env",
-        )
-    except Exception as exc:
-        logger.error("[DIGEST] Gmail SMTP error: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Gmail SMTP error: {exc}")
+        result = send_email(to=req.to_email, subject=subject, html=html_body)
+        logger.info("[DIGEST] Sent to %s via Brevo", req.to_email)
+        return {"sent": True, "to": req.to_email, "count": len(records), **result}
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except RuntimeError as exc:
+        logger.error("[DIGEST] Brevo error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
