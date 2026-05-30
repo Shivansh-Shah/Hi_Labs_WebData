@@ -3,8 +3,8 @@
 # ═══════════════════════════════════════════════════
 
 # ── Core async HTTP (all collectors use this) ──────
-httpx[http2]==0.27.0
-anyio==4.4.0
+httpx[http2]>=0.27.0
+anyio>=4.8.0
 
 # ── Certificate Transparency (free WebSocket stream) ─
 certstream==1.11
@@ -13,47 +13,44 @@ certstream==1.11
 google-genai>=2.0.0
 
 # ── Async workers ──────────────────────────────────
-celery==5.4.0
-redis==5.0.7
+celery>=5.4.0
+redis>=5.0.0
 
 # ── Config / env ───────────────────────────────────
-python-dotenv==1.0.1
+python-dotenv>=1.0.0
 
 # ── Browser automation (Scraping Browser fallback) ─
-# Only needed if using ScrapingBrowserClient
-# pip install playwright && playwright install chromium
-playwright==1.44.0
+playwright>=1.44.0
 
 # ── Data processing (Stage 3+) ─────────────────────
 pandas>=2.2.0
 spacy>=3.7.0
 
 # ── Graph clustering (Stage 4) ─────────────────────
-networkx==3.3
+networkx>=3.3
 
 # ── WHOIS (Module 2 — product launch sniper) ───────
-python-whois==0.9.4
+python-whois>=0.9.4
 
 # ── Web framework (Stage 6) ────────────────────────
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
-python-multipart>=0.0.9    # multipart form support
+python-multipart>=0.0.9
 
 # ── Database (Stage 6) ─────────────────────────────
 sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.9     # PostgreSQL driver (sync)
-alembic>=1.13.0             # schema migrations
+psycopg2-binary>=2.9.9
+alembic>=1.13.0
 
 # ── Stage 6 delivery ───────────────────────────────
-resend>=2.0.0               # transactional email (Resend API)
-
-# ── OpenAI (Stage 5) ───────────────────────────────
+resend>=2.0.0
 openai>=1.0.0
+
+# ── Launch Sniper extras ───────────────────────────
+psycopg[binary]>=3.1
+slack-sdk>=3.27.0
+mcp>=1.0.0
 
 # ── Utils ──────────────────────────────────────────
 cryptography>=42.0.0
 typing-extensions>=4.12.0
-
-# ── Dev / testing ──────────────────────────────────
-pytest==8.2.2
-pytest-asyncio==0.23.7
