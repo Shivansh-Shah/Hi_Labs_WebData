@@ -2,12 +2,13 @@ services:
   - type: web
     name: gtm-intel-api
     runtime: python
-    region: oregon          # closest to US; change to "frankfurt" for EU
-    plan: starter           # $7/mo — no sleep, 512 MB RAM, 0.5 CPU
-    # plan: free            # free but sleeps after 15 min of inactivity
+    region: oregon          # change to "frankfurt" for EU
 
-    buildCommand: |
-      pip install --upgrade pip &&
+    # python version is controlled by runtime.txt (python-3.11.9)
+    # plan: free            # free but sleeps after 15 min of inactivity
+    plan: starter           # $7/mo — always-on, no cold starts
+
+    buildCommand: >-
       pip install -r requirements.txt &&
       python -m spacy download en_core_web_sm || true
 
@@ -15,10 +16,9 @@ services:
 
     healthCheckPath: /health
 
-    # All values marked sync:false must be set manually in the Render dashboard
     envVars:
       - key: DATABASE_URL
-        sync: false          # postgresql://postgres:...@supabase.co:6543/postgres
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: GMAIL_USER
@@ -30,6 +30,4 @@ services:
       - key: BRIGHT_DATA_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
-        sync: false          # set AFTER Vercel deploy: https://your-app.vercel.app
-      - key: PYTHON_VERSION
-        value: "3.11.0"
+        sync: false
