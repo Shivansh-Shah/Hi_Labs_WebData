@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# System libs needed by psycopg2, spaCy, and pandas wheel builds
+# System libs needed by psycopg2 and httpx
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
@@ -9,17 +9,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# ── Python deps (separate layer so rebuilds are fast on code changes) ──────────
-COPY requirements.txt .
+# Install only backend-specific deps (no pandas/spacy/networkx to compile)
+COPY requirements-backend.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements-backend.txt
 
-# ── spaCy language model (optional — falls back to regex if absent) ────────────
-RUN python -m spacy download en_core_web_sm || true
-
-# ── Copy full repo (Launch Sniper subprocess needs idea 2/ tree) ───────────────
+# Copy the full repo (Launch Sniper subprocess needs the idea 2/ tree)
 COPY . .
 
-# Render injects $PORT at runtime; fall back to 10000 for local docker run
+# Render injects $PORT; default 10000 for local docker run
 EXPOSE 10000
 CMD ["sh", "-c", "uvicorn stage6.backend.main:app --host 0.0.0.0 --port ${PORT:-10000}"]

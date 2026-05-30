@@ -1,0 +1,44 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Stage 6 FastAPI backend — production requirements
+#
+# This is intentionally slim: pandas / spacy / networkx / playwright / celery
+# are NOT included because the Stage 6 API never imports them at startup.
+# They are only needed by the full GTM pipeline (main.py / PipelineRunner)
+# which runs separately.
+#
+# Use this file on Render / Docker:
+#   pip install -r requirements-backend.txt
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Web framework ──────────────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+
+# ── Database ───────────────────────────────────────────────────────────────────
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+alembic>=1.13.0
+
+# ── Environment ────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+
+# ── HTTP client ────────────────────────────────────────────────────────────────
+httpx[http2]>=0.27.0
+anyio>=4.0.0
+
+# ── AI enrichment (Stage 5 — called lazily inside /api/run handler) ────────────
+openai>=1.0.0
+
+# ── Email delivery ─────────────────────────────────────────────────────────────
+resend>=2.0.0
+
+# ── Launch Sniper subprocess dependencies ──────────────────────────────────────
+python-whois>=0.9.4
+psycopg[binary]>=3.1
+slack-sdk>=3.27.0
+mcp>=1.0.0
+
+# ── Misc ───────────────────────────────────────────────────────────────────────
+cryptography>=42.0.0
+typing-extensions>=4.12.0

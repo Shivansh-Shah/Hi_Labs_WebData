@@ -2,14 +2,12 @@ services:
   - type: web
     name: gtm-intel-api
     runtime: docker
-    region: oregon          # change to "frankfurt" for EU
-    plan: starter           # $7/mo — always-on; use "free" if you don't mind cold starts
+    region: oregon
+    plan: starter           # $7/mo always-on; use "free" to avoid cost (cold starts)
 
-    dockerfilePath: ./Dockerfile   # relative to repo root
-
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /health
 
-    # All sync:false values must be entered manually in Render dashboard → Environment
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -24,4 +22,4 @@ services:
       - key: BRIGHT_DATA_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
-        sync: false          # set AFTER Vercel deploy: https://your-app.vercel.app
+        sync: false
