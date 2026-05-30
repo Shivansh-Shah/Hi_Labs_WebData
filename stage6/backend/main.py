@@ -68,19 +68,10 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Allow Vite dev server + any origins passed via ALLOWED_ORIGINS env var
-# (comma-separated, e.g. "https://gtm-intel.vercel.app,https://www.gtm-intel.com")
-_extra = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-        *_extra,
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,   # must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
