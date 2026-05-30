@@ -1,21 +1,15 @@
 services:
   - type: web
     name: gtm-intel-api
-    runtime: python
+    runtime: docker
     region: oregon          # change to "frankfurt" for EU
+    plan: starter           # $7/mo — always-on; use "free" if you don't mind cold starts
 
-    # python version is controlled by runtime.txt (python-3.11.9)
-    # plan: free            # free but sleeps after 15 min of inactivity
-    plan: starter           # $7/mo — always-on, no cold starts
-
-    buildCommand: >-
-      pip install -r requirements.txt &&
-      python -m spacy download en_core_web_sm || true
-
-    startCommand: uvicorn stage6.backend.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile   # relative to repo root
 
     healthCheckPath: /health
 
+    # All sync:false values must be entered manually in Render dashboard → Environment
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -30,4 +24,4 @@ services:
       - key: BRIGHT_DATA_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
-        sync: false
+        sync: false          # set AFTER Vercel deploy: https://your-app.vercel.app
